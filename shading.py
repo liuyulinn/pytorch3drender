@@ -44,9 +44,10 @@ class SoftPhongShader(ShaderBase):
         texels = meshes.sample_textures(fragments)
         lights = kwargs.get("lights", self.lights)
         lights.location = lights.location[None, ...]
-        lights.ambient_color = torch.tensor((0.5, 0.5, 0.5),)[None]
-        lights.diffuse_color = torch.tensor((0.3, 0.3, 0.3),)[None]
-        lights.specular_color= torch.tensor((0.2, 0.2, 0.2),)[None]
+        # lights.ambient_color = lights.ambient_color[0]
+        lights.ambient_color = torch.tensor((0.5, 0.5, 0.5),)[None].cuda()
+        lights.diffuse_color = torch.tensor((0.3, 0.3, 0.3),)[None].cuda()
+        lights.specular_color= torch.tensor((0.2, 0.2, 0.2),)[None].cuda()
         
         materials = kwargs.get("materials", self.materials)
         blend_params = kwargs.get("blend_params", self.blend_params)

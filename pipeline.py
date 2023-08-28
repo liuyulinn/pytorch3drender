@@ -1,10 +1,12 @@
 import os
+os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import torch
 import pytorch3d
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
-
+import cv2
+import imageio.v3 as imageio
 
 from pytorch3d.io import load_objs_as_meshes, load_obj
 from pytorch3d.structures import Meshes
@@ -35,6 +37,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--file-name", type=str, default = 'test.obj')
+parser.add_argument("--output-dir", type=str, default = "output")
 parser.add_argument("--use-gpu", type=int, default = 1)
 parser.add_argument("--num-views", type=int, default = 1)
 parser.add_argument("--no-depth", type=int, default = 0)
@@ -44,10 +47,11 @@ parser.add_argument("--scale", type=float, default = 0.9)
 args = parser.parse_args()
 
 if args.use_gpu:
-    device = torch.device("cpu")    
-else:
     device = torch.device("cuda:0")
     torch.cuda.set_device(device)
+    
+else:
+    device = torch.device("cpu")    
 
 ## load obj file
 DATA_DIR = './data/cow_mesh'
@@ -71,14 +75,29 @@ mesh.scale_verts_((1.0 / float(scale) * args.scale))
 
 ## create renderer
 ### Initialize a camera
-elev = torch.rand((args.num_views,)) * torch.pi / 2 + torch.pi / 12
-azim = torch.rand((args.num_views,)) * torch.pi * 2
-# elev = 
+elev = torch.rand((args.num_views,)) * 90 - 30
+azim = torch.rand((args.num_views,)) * 360
+# # elev = 
 
-R, T = look_at_view_transform(args.radius, elev, azim)
-fovy = torch.tensor(np.arctan(32 / 2 / 35) * 2)
-cameras = FoVPerspectiveCameras(device = device, R = R, T = T, 
-    fov = fovy ) #,in_ndc=False)
+# R, T = look_at_view_transform(args.radius, elev, azim)
+# fovy = torch.tensor(np.arctan(32 / 2 / 35) * 2)
+# cameras = FoVPerspectiveCameras(device = device, R = R, T = T, 
+#     fov = fovy ) #,in_ndc=False)
+rotation , translation = look_at_view_transform(5 , 
+                                                elev, 
+                                                azim,
+                                                device = 'cuda')
+
+cameras = FoVPerspectiveCameras(R = rotation , 
+                               T = translation ,
+                               device = 'cuda')
+
+
+## Creating the Rasterization settings ##
+
+rasterization_settings = RasterizationSettings(image_size = (256 , 256) , 
+                                               blur_radius = 0. , 
+                                               faces_per_pixel = 1)
 
 
 ### Rasterization
@@ -119,9 +138,15 @@ else:
 
 plt.figure(figsize = (10, 10))
 # print(images.size())
-print(images)
-plt.imsave('images.png', images[0, ..., :3].cpu().numpy())
+# print(images)
+print(depths.size())
 
+os.makedirs(args.output_dir, exist_ok = True)
+for i in range(args.num_views):
+    plt.imsave(f'{args.output_dir}/rgb_{i:04}.png', images[i, ..., :3].cpu().numpy())
+    if not args.no_depth:
+        cv2.imwrite(f'{args.output_dir}/depth_{i:04}.exr', depths[i, ..., 0].cpu().numpy())
+        cv2.imwrite(f'{args.output_dir}/depth_{i:04}.png', depths[i, ..., 0].cpu().numpy())
 
 # image_grid(images.cpu().numpy(), rows=4, cols=5, rgb=True)
 
